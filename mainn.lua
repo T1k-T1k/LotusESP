@@ -176,6 +176,39 @@ local function searchLotusHolderInModel(model, roomName, modelName)
     end
 end
 
+-- Search for LotusPetalPickup in Parts.Crypt.CryptDesk.Other path
+local function searchLotusPetalInRoom(room, roomName)
+    if not room then return end
+    
+    -- Look for Parts folder
+    local parts = safeFind(room, "Parts")
+    if parts then
+        local crypt = safeFind(parts, "Crypt")
+        if crypt then
+            local cryptDesk = safeFind(crypt, "CryptDesk")
+            if cryptDesk then
+                local other = safeFind(cryptDesk, "Other")
+                if other then
+                    local lotusPetal = safeFind(other, "LotusPetalPickup")
+                    if lotusPetal then
+                        local displayName = string.format("LotusPetalPickup\nRoom: %s\nParts->Crypt->CryptDesk->Other", roomName)
+                        createESP(lotusPetal, displayName)
+                        print(string.format("Found LotusPetalPickup in Room %s (Parts path)", roomName))
+                    end
+                end
+                
+                -- Also check directly in CryptDesk (original path without Other)
+                local directPetal = safeFind(cryptDesk, "LotusPetalPickup")
+                if directPetal then
+                    local displayName = string.format("LotusPetalPickup\nRoom: %s\nParts->Crypt->CryptDesk", roomName)
+                    createESP(directPetal, displayName)
+                    print(string.format("Found LotusPetalPickup in Room %s (Direct CryptDesk)", roomName))
+                end
+            end
+        end
+    end
+end
+
 -- Find and update ESP
 local function updateESP()
     if not ESP_ENABLED then return end
@@ -194,7 +227,7 @@ local function updateESP()
         if room and (room:IsA("Folder") or room:IsA("Model")) then
             local roomName = tostring(room.Name)
             
-            -- Look for Assets folder in room
+            -- Search for LotusHolder in Assets path
             local assets = safeFind(room, "Assets")
             if assets then
                 -- Check all children in Assets
@@ -215,6 +248,9 @@ local function updateESP()
                     end
                 end
             end
+            
+            -- Search for LotusPetalPickup in Parts path
+            searchLotusPetalInRoom(room, roomName)
         end
     end
 end
@@ -222,7 +258,7 @@ end
 -- Toggle ESP
 local function toggleESP()
     ESP_ENABLED = not ESP_ENABLED
-    print("LotusHolder ESP:", ESP_ENABLED and "ON" or "OFF")
+    print("Lotus ESP:", ESP_ENABLED and "ON" or "OFF")
     if ESP_ENABLED then
         updateESP()
     else
@@ -280,7 +316,7 @@ local function createGUI()
     local screenGui = safeCreate("ScreenGui")
     if not screenGui then return end
     
-    safeSetProperty(screenGui, "Name", "LotusHolderESP_GUI")
+    safeSetProperty(screenGui, "Name", "LotusESP_GUI")
     safeSetProperty(screenGui, "Parent", playerGui)
     
     local toggleButton = safeCreate("TextButton")
@@ -291,7 +327,7 @@ local function createGUI()
     safeSetProperty(toggleButton, "Position", UDim2.new(0, 10, 0, 10))
     safeSetProperty(toggleButton, "BackgroundColor3", Color3.new(0.5, 0.3, 0.8))
     safeSetProperty(toggleButton, "BorderSizePixel", 0)
-    safeSetProperty(toggleButton, "Text", "LotusHolder ESP: ON")
+    safeSetProperty(toggleButton, "Text", "Lotus ESP: ON")
     safeSetProperty(toggleButton, "TextColor3", Color3.new(1, 1, 1))
     safeSetProperty(toggleButton, "TextScaled", true)
     safeSetProperty(toggleButton, "Font", Enum.Font.GothamBold)
@@ -306,7 +342,7 @@ local function createGUI()
     -- Button click
     connections.buttonClick = safeConnect(toggleButton.MouseButton1Click, function()
         toggleESP()
-        safeSetProperty(toggleButton, "Text", ESP_ENABLED and "LotusHolder ESP: ON" or "LotusHolder ESP: OFF")
+        safeSetProperty(toggleButton, "Text", ESP_ENABLED and "Lotus ESP: ON" or "Lotus ESP: OFF")
         safeSetProperty(toggleButton, "BackgroundColor3", ESP_ENABLED and Color3.new(0.5, 0.3, 0.8) or Color3.new(0.8, 0.3, 0.3))
     end)
     
@@ -336,8 +372,11 @@ end
 
 -- Safe initialization
 local function initialize()
-    print("LotusHolder ESP loading...")
-    print("Target: workspace.CurrentRooms[*].Assets.[AnyModel].LotusHolder")
+    print("Lotus ESP loading...")
+    print("Target paths:")
+    print("1. workspace.CurrentRooms[*].Assets.[AnyModel].LotusHolder")
+    print("2. workspace.CurrentRooms[*].Parts.Crypt.CryptDesk.Other.LotusPetalPickup")
+    print("3. workspace.CurrentRooms[*].Parts.Crypt.CryptDesk.LotusPetalPickup")
     print("Color: Light Purple")
     
     -- Initial ESP update
@@ -354,8 +393,8 @@ local function initialize()
         connections.cleanup = safeConnect(LocalPlayer.CharacterRemoving, cleanup)
     end
     
-    print("LotusHolder ESP loaded successfully!")
-    print("Will search in ALL models within Assets folder of any room")
+    print("Lotus ESP loaded successfully!")
+    print("Will search for both LotusHolder and LotusPetalPickup in all rooms")
 end
 
 -- Start the script
