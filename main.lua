@@ -1,4 +1,4 @@
--- LotusPetal ESP Script - Full nil protection
+-- LotusPetal ESP Script - Full nil protection kaka
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
