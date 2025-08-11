@@ -129,22 +129,121 @@ end
 -- Initial ESP update
 updateESP()
 
--- Update ESP periodically and when new rooms are added
-local connection = RunService.Heartbeat:Connect(function()
-    if ESP_ENABLED then
+-- Storage for connections to avoid memory leaks
+local connections = {}
+
+-- Function to setup room monitoring
+local function setupRoomMonitoring(room)
+    if not room or connections[room] then return end
+    
+    connections[room] = {}
+    
+    -- Monitor Parts folder
+    local function monitorParts(parts)
+        if connections[room].parts then return end
+        connections[room].parts = {}
+        
+        -- Monitor existing and new children in Parts
+        local function checkForCrypt()
+            local crypt = parts:FindFirstChild("Crypt")
+            if crypt and not connections[room].crypt then
+                -- Monitor CryptDesk in Crypt
+                connections[room].crypt = crypt.ChildAdded:Connect(function(child)
+                    if child.Name == "CryptDesk" then
+                        wait(0.1) -- Small delay
+                        if ESP_ENABLED then updateESP() end
+                    end
+                end)
+                
+                -- Check if CryptDesk already exists
+                local cryptDesk = crypt:FindFirstChild("CryptDesk")
+                if cryptDesk then
+                    -- Monitor LotusPetalPickup in CryptDesk
+                    local connection = cryptDesk.ChildAdded:Connect(function(child)
+                        if child.Name == "LotusPetalPickup" then
+                            wait(0.1)
+                            if ESP_ENABLED then updateESP() end
+                        end
+                    end)
+                    table.insert(connections[room].parts, connection)
+                end
+            end
+        end
+        
+        -- Check immediately and monitor for Crypt
+        checkForCrypt()
+        local cryptConnection = parts.ChildAdded:Connect(function(child)
+            if child.Name == "Crypt" then
+                wait(0.1)
+                checkForCrypt()
+                if ESP_ENABLED then updateESP() end
+            end
+        end)
+        table.insert(connections[room].parts, cryptConnection)
+    end
+    
+    -- Check if Parts already exists
+    local parts = room:FindFirstChild("Parts")
+    if parts then
+        monitorParts(parts)
+    end
+    
+    -- Monitor for Parts folder creation
+    connections[room].main = room.ChildAdded:Connect(function(child)
+        if child.Name == "Parts" then
+            wait(0.1) -- Small delay to ensure folder is ready
+            monitorParts(child)
+            if ESP_ENABLED then updateESP() end
+        end
+    end)
+end
+
+-- Function to setup CurrentRooms monitoring
+local function setupCurrentRoomsMonitoring()
+    local currentRooms = Workspace:FindFirstChild("CurrentRooms")
+    if currentRooms then
+        -- Monitor existing rooms
+        for _, room in pairs(currentRooms:GetChildren()) do
+            setupRoomMonitoring(room)
+        end
+        
+        -- Monitor new rooms
+        currentRooms.ChildAdded:Connect(function(room)
+            print("New room detected:", room.Name)
+            wait(0.2) -- Longer delay for room to fully load
+            setupRoomMonitoring(room)
+            if ESP_ENABLED then updateESP() end
+        end)
+    end
+end
+
+-- Monitor for CurrentRooms creation if it doesn't exist
+local function waitForCurrentRooms()
+    if Workspace:FindFirstChild("CurrentRooms") then
+        setupCurrentRoomsMonitoring()
+    else
+        local connection
+        connection = Workspace.ChildAdded:Connect(function(child)
+            if child.Name == "CurrentRooms" then
+                print("CurrentRooms folder created!")
+                wait(0.5)
+                setupCurrentRoomsMonitoring()
+                if ESP_ENABLED then updateESP() end
+                connection:Disconnect()
+            end
+        end)
+    end
+end
+
+-- Update ESP periodically (reduced frequency since we have event-based updates)
+local heartbeatConnection = RunService.Heartbeat:Connect(function()
+    if ESP_ENABLED and tick() % 2 < 0.1 then -- Update every 2 seconds instead of every frame
         updateESP()
     end
 end)
 
--- Listen for new rooms being added
-if Workspace:FindFirstChild("CurrentRooms") then
-    Workspace.CurrentRooms.ChildAdded:Connect(function()
-        if ESP_ENABLED then
-            wait(0.5) -- Small delay to ensure room is fully loaded
-            updateESP()
-        end
-    end)
-end
+-- Start monitoring
+waitForCurrentRooms()
 
 -- GUI for easy toggle (optional)
 local screenGui = Instance.new("ScreenGui")
@@ -177,9 +276,28 @@ end)
 -- Cleanup function
 local function cleanup()
     clearAllESP()
-    if connection then
-        connection:Disconnect()
+    
+    -- Disconnect heartbeat
+    if heartbeatConnection then
+        heartbeatConnection:Disconnect()
     end
+    
+    -- Disconnect all room monitoring connections
+    for room, roomConnections in pairs(connections) do
+        if roomConnections.main then
+            roomConnections.main:Disconnect()
+        end
+        if roomConnections.crypt then
+            roomConnections.crypt:Disconnect()
+        end
+        if roomConnections.parts then
+            for _, conn in pairs(roomConnections.parts) do
+                conn:Disconnect()
+            end
+        end
+    end
+    connections = {}
+    
     if screenGui then
         screenGui:Destroy()
     end
@@ -190,3 +308,4 @@ LocalPlayer.CharacterRemoving:Connect(cleanup)
 
 print("LotusPetal ESP loaded! Use the button in top-left corner to toggle.")
 print("Looking for: workspace.CurrentRooms[*].Parts.Crypt.CryptDesk.LotusPetalPickup")
+print("Monitoring for dynamic content creation...")
